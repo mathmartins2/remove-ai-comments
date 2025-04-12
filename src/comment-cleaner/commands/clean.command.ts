@@ -46,11 +46,7 @@ export class CleanCommand extends CommandRunner {
         console.log('\n');
         console.log(chalk.bold('📝 Processed Files:'));
         modifiedFiles.forEach(file => {
-          let status = chalk.green('modified');
-          if (options?.dryRun) {
-            status = chalk.yellow('would be modified');
-          }
-          console.log(`${file.filePath}: ${file.commentCount} comments ${status}`);
+          this.displayFileStatus(file.filePath, file.commentCount, options?.dryRun);
         });
       }
       
@@ -61,6 +57,13 @@ export class CleanCommand extends CommandRunner {
       console.error('❌ Error:', error.message);
       process.exit(1);
     }
+  }
+
+  private displayFileStatus(filePath: string, commentCount: number, isDryRun?: boolean): void {
+    const status = isDryRun 
+      ? chalk.yellow('would be modified')
+      : chalk.green('modified');
+    console.log(`${filePath}: ${commentCount} comments ${status}`);
   }
 
   @Option({

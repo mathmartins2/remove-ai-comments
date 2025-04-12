@@ -23,22 +23,20 @@ export class InteractiveCommand extends CommandRunner {
     const startTime = Date.now();
     
     try {
-      if (passedParams.length > 0) {
-        options = { ...options, path: passedParams[0] };
-      }
+      const updatedOptions = this.getUpdatedOptions(passedParams, options);
       
-      const result = await this.cleanerService.cleanComments(options);
+      const result = await this.cleanerService.cleanComments(updatedOptions);
       
       console.log('\n');
       console.log(chalk.bold('🎉 Comment Cleaning Complete:'));
       console.log(chalk.blue(`🔍 Total files scanned: ${result.totalFiles}`));
       console.log(chalk.green(`🗑️  Total comments removed: ${result.totalComments}`));
       
-      if (options?.dryRun) {
+      if (updatedOptions?.dryRun) {
         console.log(chalk.yellow('⚠️  DRY RUN - No files were modified'));
       }
       
-      if (options?.backup) {
+      if (updatedOptions?.backup) {
         console.log(chalk.cyan('💾 Backup files created (.bak extension)'));
       }
       
@@ -47,11 +45,7 @@ export class InteractiveCommand extends CommandRunner {
         console.log('\n');
         console.log(chalk.bold('📝 Processed Files:'));
         modifiedFiles.forEach(file => {
-          let status = chalk.green('modified');
-          if (options?.dryRun) {
-            status = chalk.yellow('would be modified');
-          }
-          console.log(`${file.filePath}: ${file.commentCount} comments ${status}`);
+          this.displayFileStatus(file.filePath, file.commentCount, updatedOptions?.dryRun);
         });
       }
       
@@ -62,5 +56,23 @@ export class InteractiveCommand extends CommandRunner {
       console.error('❌ Error:', error.message);
       process.exit(1);
     }
+  }
+
+  private getUpdatedOptions(passedParams: string[], originalOptions?: CleanerOptions): CleanerOptions {
+    if (passedParams.length === 0) {
+      return originalOptions || {};
+    }
+    
+    return {
+      ...originalOptions,
+      path: passedParams[0]
+    };
+  }
+
+  private displayFileStatus(filePath: string, commentCount: number, isDryRun?: boolean): void {
+    const status = isDryRun 
+      ? chalk.yellow('would be modified')
+      : chalk.green('modified');
+    console.log(`${filePath}: ${commentCount} comments ${status}`);
   }
 } 

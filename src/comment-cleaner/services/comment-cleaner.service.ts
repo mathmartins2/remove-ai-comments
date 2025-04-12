@@ -83,19 +83,9 @@ export class CommentCleanerService {
     
     try {
       const targetPath = options.path || '.';
-      let files: string[] = [];
+      const initialFiles: string[] = [];
       
-      if (fs.existsSync(targetPath) && fs.statSync(targetPath).isFile()) {
-        files = [targetPath];
-      }
-      
-      if (files.length === 0) {
-        const pattern = targetPath.includes('*') 
-          ? targetPath
-          : path.join(targetPath, `**/*{${this.supportedExtensions.join(',')}}`);
-          
-        files = await glob(pattern, { nodir: true });
-      }
+      const files = await this.getFilesToProcess(targetPath, initialFiles);
       
       stats.totalFiles = files.length;
 
@@ -111,6 +101,18 @@ export class CommentCleanerService {
       console.error('Error processing files:', error);
       throw error;
     }
+  }
+
+  private async getFilesToProcess(targetPath: string, initialFiles: string[]): Promise<string[]> {
+    if (fs.existsSync(targetPath) && fs.statSync(targetPath).isFile()) {
+      return [targetPath];
+    }
+    
+    const pattern = targetPath.includes('*') 
+      ? targetPath
+      : path.join(targetPath, `**/*{${this.supportedExtensions.join(',')}}`);
+      
+    return await glob(pattern, { nodir: true });
   }
 
   private async processFile(
@@ -130,16 +132,14 @@ export class CommentCleanerService {
       }
 
       const content = fs.readFileSync(filePath, 'utf8');
-      
-      let cleanedContent = content;
-      let matches = content.match(commentPattern);
+      const matches = content.match(commentPattern);
       
       if (!matches) {
         return result;
       }
       
       result.commentCount = matches.length;
-      cleanedContent = content.replace(commentPattern, '');
+      const cleanedContent = content.replace(commentPattern, '');
       
       if (options.dryRun) {
         return result;
