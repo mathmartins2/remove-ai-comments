@@ -4,80 +4,158 @@ import * as path from 'path';
 import { glob } from 'glob';
 import { CleanerOptions, CleanerStats, FileProcessResult } from '../models/options.model';
 
+interface LanguageConfig {
+  extensions: string[];
+  commentPattern: RegExp;
+}
+
 @Injectable()
 export class CommentCleanerService {
-  private readonly COMMENT_REGEX = /^[ \t]*\/\/.*(?:\r?\n)?/gm;
-  private readonly SUPPORTED_EXTENSIONS = ['.ts', '.js', '.jsx', '.tsx'];
+  private readonly languageConfigs: Record<string, LanguageConfig> = {
+    javascript: {
+      extensions: ['.js', '.jsx', '.ts', '.tsx'],
+      commentPattern: /^[ \t]*\/\/.*(?:\r?\n)?/gm,
+    },
+    python: {
+      extensions: ['.py', '.pyw'],
+      commentPattern: /^[ \t]*#.*(?:\r?\n)?/gm,
+    },
+    ruby: {
+      extensions: ['.rb', '.rake'],
+      commentPattern: /^[ \t]*#.*(?:\r?\n)?/gm,
+    },
+    php: {
+      extensions: ['.php'],
+      commentPattern: /^[ \t]*(?:\/\/|#).*(?:\r?\n)?/gm,
+    },
+    go: {
+      extensions: ['.go'],
+      commentPattern: /^[ \t]*\/\/.*(?:\r?\n)?/gm,
+    },
+    rust: {
+      extensions: ['.rs'],
+      commentPattern: /^[ \t]*\/\/.*(?:\r?\n)?/gm,
+    },
+    c: {
+      extensions: ['.c', '.h', '.cpp', '.hpp', '.cc', '.cxx'],
+      commentPattern: /^[ \t]*\/\/.*(?:\r?\n)?/gm,
+    },
+    java: {
+      extensions: ['.java'],
+      commentPattern: /^[ \t]*\/\/.*(?:\r?\n)?/gm,
+    },
+    csharp: {
+      extensions: ['.cs'],
+      commentPattern: /^[ \t]*\/\/.*(?:\r?\n)?/gm,
+    },
+    swift: {
+      extensions: ['.swift'],
+      commentPattern: /^[ \t]*\/\/.*(?:\r?\n)?/gm,
+    },
+  };
+
+  private get supportedExtensions(): string[] {
+    return Object.values(this.languageConfigs)
+      .flatMap(config => config.extensions);
+  }
+
+  private getCommentPatternForFile(filePath: string): RegExp | null {
+    const ext = path.extname(filePath).toLowerCase();
+    
+    for (const config of Object.values(this.languageConfigs)) {
+      if (config.extensions.includes(ext)) {
+        return config.commentPattern;
+      }
+    }
+    
+    return null;
+  }
 
   async cleanComments(options: CleanerOptions): Promise<CleanerStats> {
+    const stats: CleanerStats = {
+      totalFiles: 0,
+      totalComments: 0,
+      elapsedTime: 0,
+      processedFiles: [],
+    };
+
     const startTime = Date.now();
-    const files = await this.findFiles(options.path);
     
-    const processedFiles: FileProcessResult[] = [];
-    let totalComments = 0;
-    
-    for (const file of files) {
-      const result = await this.processFile(file, options);
-      processedFiles.push(result);
-      totalComments += result.commentCount;
+    try {
+      const targetPath = options.path || '.';
+      let files: string[] = [];
+      
+      if (fs.existsSync(targetPath) && fs.statSync(targetPath).isFile()) {
+        files = [targetPath];
+      }
+      
+      if (files.length === 0) {
+        const pattern = targetPath.includes('*') 
+          ? targetPath
+          : path.join(targetPath, `**/*{${this.supportedExtensions.join(',')}}`);
+          
+        files = await glob(pattern, { nodir: true });
+      }
+      
+      stats.totalFiles = files.length;
+
+      for (const file of files) {
+        const result = await this.processFile(file, options);
+        stats.totalComments += result.commentCount;
+        stats.processedFiles.push(result);
+      }
+      
+      stats.elapsedTime = Date.now() - startTime;
+      return stats;
+    } catch (error) {
+      console.error('Error processing files:', error);
+      throw error;
     }
-    
-    const endTime = Date.now();
-    
-    return {
-      totalFiles: files.length,
-      totalComments,
-      elapsedTime: endTime - startTime,
-      processedFiles,
-    };
   }
 
-  private async findFiles(pathPattern: string): Promise<string[]> {
-    if (!pathPattern) {
-      pathPattern = '.';
-    }
-
-    let files: string[] = [];
-
-    if (fs.existsSync(pathPattern) && fs.statSync(pathPattern).isDirectory()) {
-      for (const ext of this.SUPPORTED_EXTENSIONS) {
-        const matches = await glob(`${pathPattern}/**/*${ext}`);
-        files = [...files, ...matches];
-      }
-    } 
-    else if (fs.existsSync(pathPattern) && fs.statSync(pathPattern).isFile()) {
-      const ext = path.extname(pathPattern);
-      if (this.SUPPORTED_EXTENSIONS.includes(ext)) {
-        files = [pathPattern];
-      }
-    } 
-    else {
-      files = await glob(pathPattern);
-      files = files.filter(file => 
-        this.SUPPORTED_EXTENSIONS.includes(path.extname(file))
-      );
-    }
-
-    return files;
-  }
-
-  private async processFile(filePath: string, options: CleanerOptions): Promise<FileProcessResult> {
-    const content = fs.readFileSync(filePath, 'utf-8');
-    const newContent = content.replace(this.COMMENT_REGEX, '');
-    const commentCount = (content.match(this.COMMENT_REGEX) || []).length;
-    
-    if (options.backup && !options.dryRun && commentCount > 0) {
-      fs.writeFileSync(`${filePath}.bak`, content);
-    }
-    
-    if (!options.dryRun && commentCount > 0) {
-      fs.writeFileSync(filePath, newContent);
-    }
-    
-    return {
+  private async processFile(
+    filePath: string, 
+    options: CleanerOptions
+  ): Promise<FileProcessResult> {
+    const result: FileProcessResult = {
       filePath,
-      commentCount,
-      processed: !options.dryRun && commentCount > 0,
+      commentCount: 0,
+      processed: false,
     };
+
+    try {
+      const commentPattern = this.getCommentPatternForFile(filePath);
+      if (!commentPattern) {
+        return result;
+      }
+
+      const content = fs.readFileSync(filePath, 'utf8');
+      
+      let cleanedContent = content;
+      let matches = content.match(commentPattern);
+      
+      if (!matches) {
+        return result;
+      }
+      
+      result.commentCount = matches.length;
+      cleanedContent = content.replace(commentPattern, '');
+      
+      if (options.dryRun) {
+        return result;
+      }
+      
+      if (options.backup) {
+        fs.writeFileSync(`${filePath}.bak`, content);
+      }
+      
+      fs.writeFileSync(filePath, cleanedContent);
+      result.processed = true;
+      
+      return result;
+    } catch (error) {
+      console.error(`Error processing file ${filePath}:`, error);
+      return result;
+    }
   }
 } 

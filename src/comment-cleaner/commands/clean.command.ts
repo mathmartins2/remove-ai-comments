@@ -41,16 +41,16 @@ export class CleanCommand extends CommandRunner {
         console.log(chalk.cyan('💾 Backup files created (.bak extension)'));
       }
       
-      if (result.processedFiles.length > 0) {
+      const modifiedFiles = result.processedFiles.filter(file => file.commentCount > 0);
+      if (modifiedFiles.length > 0) {
         console.log('\n');
         console.log(chalk.bold('📝 Processed Files:'));
-        result.processedFiles.forEach(file => {
-          if (file.commentCount > 0) {
-            const status = options?.dryRun 
-              ? chalk.yellow('would be modified') 
-              : chalk.green('modified');
-            console.log(`${file.filePath}: ${file.commentCount} comments ${status}`);
+        modifiedFiles.forEach(file => {
+          let status = chalk.green('modified');
+          if (options?.dryRun) {
+            status = chalk.yellow('would be modified');
           }
+          console.log(`${file.filePath}: ${file.commentCount} comments ${status}`);
         });
       }
       

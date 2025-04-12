@@ -29,7 +29,7 @@ A CLI tool built with NestJS that scans files and safely removes comment lines.
 ## Features
 
 - Remove comment lines from files or directories
-- Support for multiple file types (.ts, .js, .jsx, .tsx)
+- Support for multiple programming languages and their file extensions
 - Optional file backup before modifications
 - Dry run mode to preview changes without modifying files
 - Detailed logs of processed files and comment counts
@@ -121,12 +121,25 @@ nest-comment-cleaner "src/**/*.ts" --dry-run
 - `--backup` (`-b`): Create backup files (.bak) before modifying
 - `--dry-run` (`-d`): Show what would be done without modifying files
 
-## Supported File Types
+## Supported Languages and File Types
 
-- TypeScript (.ts)
-- JavaScript (.js)
-- JSX (.jsx)
-- TSX (.tsx)
+The tool supports removing line comments from the following languages:
+
+- JavaScript/TypeScript (.js, .jsx, .ts, .tsx)
+- Python (.py, .pyw)
+- Ruby (.rb, .rake)
+- PHP (.php)
+- Go (.go)
+- Rust (.rs)
+- C/C++ (.c, .h, .cpp, .hpp, .cc, .cxx)
+- Java (.java)
+- C# (.cs)
+- Swift (.swift)
+
+Each language uses its appropriate comment format:
+- `//` comments for JavaScript, TypeScript, Java, C#, Swift, Go, Rust, C/C++
+- `#` comments for Python, Ruby
+- Both `//` and `#` comments for PHP
 
 ## Development
 
